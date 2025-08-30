@@ -1,0 +1,8 @@
+
+:root{
+    --dark-bg:#262C35;
+    --light-bg:#FFFFFF;
+}
+html,body{
+    overflow : hidden;
+}

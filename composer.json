@@ -1,0 +1,32 @@
+{
+    "name": "webdernargor/php-nuxt-clone",
+    "description": "PHP page layout components system clone form nuxt starter code",
+    "type": "project",
+    "autoload": {
+        "psr-4": {
+            "App\\": "."
+        }
+    },
+    "require": {
+        "php": ">=7.0",
+        "firebase/php-jwt": "^6.11",
+        "flowjs/flow-php-server": "*",
+        "intervention/image": "^2.7",
+        "james-heinrich/getid3": "^1.9",
+        "cboden/ratchet": "^0.4.4",
+        "workerman/workerman": "^5.1"
+    },
+    "require-dev": {
+        "php": ">=7.0"
+    },
+    "scripts": {
+        "web": "php serve.php",
+         "hot": "npx browser-sync start --proxy \"localhost:8000\" --files \"**/*.php, **/*.html, **/*.css, **/*.js\"",
+        "post-autoload-dump": [
+        "echo 'Autoload dumped successfully!'"
+    ]
+    },
+    "config": {
+        "process-timeout": 0
+    }
+}
