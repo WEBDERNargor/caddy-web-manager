@@ -28,7 +28,6 @@ class InitController
             );
         ");
 
-        // ตรวจสอบว่ามี admin อยู่แล้วหรือยัง
         $stmt = $this->db->prepare("SELECT COUNT(*) FROM users WHERE username = 'admin'");
         $stmt->execute();
         if ($stmt->fetchColumn() == 0) {

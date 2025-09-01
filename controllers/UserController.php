@@ -144,7 +144,7 @@ class UserController
     public function ChangePassword($id, $currentPassword, $newPassword)
     {
         try {
-            // Fetch current hash
+           
             $stmt = $this->db->prepare("SELECT password_hash FROM users WHERE id = :id");
             $stmt->bindParam(':id', $id, PDO::PARAM_INT);
             $stmt->execute();

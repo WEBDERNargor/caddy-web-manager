@@ -6,14 +6,12 @@ $setHead(<<<HTML
 <title> Home - {$config['web']['name']}</title>
 HTML);
 
-// PHP-only call to /api/config/ that works in dev (php -S) and production
 $appUrl = rtrim($config['web']['url'] ?? '', '/');
 $base = defined('BASE_PATH') ? rtrim(BASE_PATH, '/') : '';
 $root = $appUrl !== '' ? $appUrl : ($base !== '' ? $base : '');
 $url = $root . '/api/config/';
 
 if (PHP_SAPI === 'cli-server') {
-    // Avoid deadlock on built-in server by including proxy directly
     $proxy = __DIR__ . '/../api/caddy/index.php';
     if (!defined('CADDY_PROXY_EMBED')) {
         define('CADDY_PROXY_EMBED', true);
@@ -27,7 +25,6 @@ if (PHP_SAPI === 'cli-server') {
     $response = ob_get_clean();
     $_SERVER = $backup['_SERVER'];
 } else {
-    // Normal environments → simple cURL
     $curl = curl_init();
     curl_setopt_array($curl, array(
         CURLOPT_URL => $url,
@@ -45,9 +42,6 @@ if (PHP_SAPI === 'cli-server') {
 }
 
 $data = json_decode($response, true);
-// pre_r($data);
-
-// Extract servers from Caddy config structure: apps -> http -> servers (object map)
 $servers = [];
 if (is_array($data)) {
     $apps = $data['apps'] ?? null;
@@ -60,15 +54,13 @@ if (is_array($data)) {
                     $port = '';
                     if (isset($srv['listen']) && is_array($srv['listen']) && count($srv['listen']) > 0) {
                         $listen = $srv['listen'][0];
-                        // Examples: ":80", ":443", "0.0.0.0:8080", "[::]:443"
                         if (is_string($listen)) {
-                            // strip brackets for IPv6 and extract trailing :port
                             $listen = trim($listen);
                             $colonPos = strrpos($listen, ':');
                             if ($colonPos !== false) {
                                 $port = substr($listen, $colonPos + 1);
                             } else {
-                                $port = $listen; // fallback
+                                $port = $listen;
                             }
                         }
                     }
@@ -120,14 +112,13 @@ if (is_array($data)) {
 </div>
 
 <script>
-    // Initialize DataTable with a clean Tailwind look
+   
     $(function () {
         const table = $('#serversTable').DataTable({
             responsive: true,
             pageLength: 5,
             lengthMenu: [5, 10, 25, 50],
             order: [[0, 'asc']],
-            // Apply Tailwind text color class to all columns (th/td)
             columnDefs: [
                 { targets: '_all', className: 'text-theme' }
             ],
@@ -140,21 +131,16 @@ if (is_array($data)) {
         });
 
         function applyDTTheme() {
-            // Support DataTables v1 and v2 DOM simultaneously
             const $wrap = $('#serversTable').closest('.dataTables_wrapper, .dt-container');
-            // Wrapper
             $wrap.addClass('text-theme');
-            // Top controls (v1)
             $wrap.find('.dataTables_length, .dataTables_filter').addClass('text-theme');
             $wrap.find('.dataTables_length *, .dataTables_filter *').addClass('text-theme');
-            // Top controls (v2)
             $wrap.find('.dt-length, .dt-search').addClass('text-theme');
             $wrap.find('.dt-length *, .dt-search *').addClass('text-theme');
             const $lenSel = $wrap.find('.dataTables_length select, .dt-length select');
             const $searchInp = $wrap.find('.dataTables_filter input, .dt-search input');
             $lenSel.addClass('input-theme border-theme text-theme');
             $searchInp.addClass('input-theme border-theme text-theme');
-            // Fallback force color (in case external CSS overrides)
             try {
                 const theme = (typeof readCookie === 'function') ? readCookie('theme') : null;
                 const styles = getComputedStyle(document.body);
@@ -168,21 +154,19 @@ if (is_array($data)) {
                 $wrap.find('.dataTables_length, .dataTables_filter').css('color', useText);
                 $lenSel.css({ color: useText, borderColor: useBorder });
                 $searchInp.css({ color: useText, borderColor: useBorder, caretColor: useText });
-            } catch (e) { /* no-op */ }
-            // Bottom controls v1
+            } catch (e) { }
+          
             $wrap.find('.dataTables_info').addClass('text-theme').find('*').addClass('text-theme');
             $wrap.find('.dataTables_paginate').addClass('text-theme');
             $wrap.find('.dataTables_paginate a, .dataTables_paginate span')
                 .addClass('text-theme border-theme');
             $wrap.find('.paginate_button, .paginate_button.current, .paginate_button.disabled')
                 .addClass('text-theme border-theme');
-            // Bottom controls v2
             $wrap.find('.dt-info').addClass('text-theme').find('*').addClass('text-theme');
             $wrap.find('.dt-paging').addClass('text-theme');
             $wrap.find('.dt-paging button, .dt-paging a, .dt-paging span')
                 .addClass('text-theme border-theme');
             $wrap.find('.dt-paging-button').addClass('text-theme border-theme');
-            // Explicit: arrow buttons (first/prev/next/last)
             const $arrows = $wrap.find('.paginate_button.previous, .paginate_button.next, .paginate_button.first, .paginate_button.last, .dt-paging-button.previous, .dt-paging-button.next, .dt-paging-button.first, .dt-paging-button.last');
             $arrows.addClass('text-theme border-theme');
             try {
@@ -198,34 +182,26 @@ if (is_array($data)) {
             if (typeof loadtheme === 'function') loadtheme();
         }
 
-        // Apply immediately (post-initialization) and re-apply on events
         applyDTTheme();
-        // Re-apply theme after DataTables is ready and on each redraw
         $('#serversTable').on('init.dt', function () {
             applyDTTheme();
         }).on('draw.dt', function () {
             applyDTTheme();
         });
-
-        // When global theme changes from navbar toggle
         document.addEventListener('theme:changed', function () {
             applyDTTheme();
         });
-
-        // Adjust on tab/layout changes if any
         setTimeout(() => {
             table.columns.adjust().draw(false);
             applyDTTheme();
         }, 50);
 
-        // ===== Server CRUD via proxy (/api/caddy/) =====
         const base = '<?= defined('BASE_PATH') ? addslashes(BASE_PATH) : '' ?>';
-        let editServerOriginal = null; // null = add, string = original name when editing
+        let editServerOriginal = null; 
 
         function formatListen(port) {
             const p = String(port || '').trim();
             if (p === '') return ':80';
-            // if contains ':' (e.g., 0.0.0.0:8080 or :443), keep
             if (p.includes(':')) return p;
             return ':' + p;
         }
@@ -244,15 +220,13 @@ if (is_array($data)) {
             $('#serverPort').val('');
         }
 
-        // Open Add
         $('#btnOpenAddServer').on('click', function(){
             editServerOriginal = null;
             openServerModal('Add Server', '', '');
         });
-        // Close
+ 
         $('#btnCloseServer, #btnCloseServer2, #serverBackdrop').on('click', function(){ closeServerModal(); });
 
-        // Edit existing
         $(document).on('click', '.btnEditServer', function(){
             const name = $(this).data('name');
             const port = $(this).data('port');
@@ -260,7 +234,6 @@ if (is_array($data)) {
             openServerModal('Edit Server', name, port);
         });
 
-        // Delete server
         $(document).on('click', '.btnDeleteServer', async function(){
             const name = String($(this).data('name') || '');
             if (!name) return;
@@ -290,7 +263,6 @@ if (is_array($data)) {
             } catch (err) { Swal.fire({ icon: 'error', title: 'Delete server failed', text: (err && err.message ? err.message : String(err)) }); }
         });
 
-        // Submit add/edit server
         $('#serverForm').on('submit', async function(e){
             e.preventDefault();
             const name = String($('#serverName').val() || '').trim();
@@ -307,20 +279,20 @@ if (is_array($data)) {
 
                 const servers = cfg.apps.http.servers;
                 if (editServerOriginal === null) {
-                    // Add new
+                   
                     if (servers[name]) throw new Error('Server already exists: ' + name);
                     servers[name] = { listen: [ formatListen(port || ':80') ], routes: [] };
                 } else {
-                    // Edit existing (rename allowed)
+             
                     const orig = editServerOriginal;
                     if (!servers[orig]) throw new Error('Server not found: ' + orig);
-                    // Move if name changed
+                
                     if (name !== orig) {
                         if (servers[name]) throw new Error('Target name already exists: ' + name);
                         servers[name] = servers[orig];
                         delete servers[orig];
                     }
-                    // Update listen
+                  
                     if (!servers[name].listen || !Array.isArray(servers[name].listen)) servers[name].listen = [];
                     servers[name].listen = [ formatListen(port || ':80') ];
                 }
@@ -340,7 +312,7 @@ if (is_array($data)) {
     });
 </script>
 
-<!-- Add/Edit Server Modal -->
+
 <div id="serverModal" class="fixed inset-0 hidden" aria-hidden="true">
     <div id="serverBackdrop" class="absolute inset-0 bg-black/50"></div>
     <div class="absolute inset-0 flex items-center justify-center p-4">

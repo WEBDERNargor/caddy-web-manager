@@ -11,7 +11,7 @@ if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $password = $_POST['password'] ?? null;
 
         if (!$username || !$password) {
-            // Handle missing username or password
+          
             echo "<script>document.addEventListener('DOMContentLoaded',function(){ Swal.fire({icon:'warning', title:'Missing fields', text:'Please enter both username and password.'}); });</script>";
         } else {
             $login = $AuthController->Login($username, $password);
