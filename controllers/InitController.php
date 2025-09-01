@@ -40,9 +40,10 @@ class InitController
             );
         ");
 
-        $stmt = $this->db->prepare("SELECT COUNT(*) FROM users WHERE username = 'admin'");
+        // Seed default admin only if there are no users at all
+        $stmt = $this->db->prepare("SELECT COUNT(*) FROM users");
         $stmt->execute();
-        if ($stmt->fetchColumn() == 0) {
+        if ((int)$stmt->fetchColumn() === 0) {
             $passwordHash = password_hash('admin', PASSWORD_DEFAULT);
             $this->db->exec("INSERT INTO users (username, email, password_hash, role) VALUES ('admin','admin@admin.com','{$passwordHash}','admin');");
         }
