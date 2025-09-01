@@ -1,12 +1,71 @@
 <?php
+require_once __DIR__ . '/../../vendor/autoload.php';
+$config = require __DIR__ . "/../../config.php";
 // Detect embedded include mode (internal call from a page)
 $__EMBED = defined('CADDY_PROXY_EMBED') && CADDY_PROXY_EMBED;
 // Load config
-$config = require __DIR__ . "/../../config.php";
+
 
 // Debug header to confirm routing reaches this proxy (skip when embedded)
 if (!$__EMBED) {
     header('X-Proxy-By: caddy-proxy');
+}
+
+// ===========================
+// API Key verification (non-embedded requests only)
+// ===========================
+if (!$__EMBED) {
+    // Lazy-load DB utilities
+
+    
+    
+    try {
+        $apiKey = null;
+        // Header first
+        foreach (['HTTP_X_API_KEY', 'HTTP_AUTHORIZATION'] as $hdr) {
+            if (!empty($_SERVER[$hdr])) {
+                $val = trim((string)$_SERVER[$hdr]);
+                if ($hdr === 'HTTP_AUTHORIZATION' && stripos($val, 'Bearer ') === 0) {
+                    $val = trim(substr($val, 7));
+                }
+                if ($val !== '') { $apiKey = $val; break; }
+            }
+        }
+        // Fallback to query ?api_key=
+        if (!$apiKey && isset($_GET['api_key'])) {
+            $apiKey = trim((string)$_GET['api_key']);
+        }
+
+        if (!$apiKey) {
+            http_response_code(401);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Missing API key']);
+            exit;
+        }
+
+        // Verify in DB
+        $pdo = \App\includes\Database::getInstance();
+        if (!$pdo) { throw new \RuntimeException('Database not configured'); }
+        $stmt = $pdo->prepare('SELECT id, active FROM api_keys WHERE token = :t LIMIT 1');
+        $stmt->execute([':t' => $apiKey]);
+        $row = $stmt->fetch();
+        if (!$row || (int)$row['active'] !== 1) {
+            http_response_code(403);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Invalid API key']);
+            exit;
+        }
+        // update last_used_at (best-effort)
+        try {
+            $up = $pdo->prepare('UPDATE api_keys SET last_used_at = CURRENT_TIMESTAMP WHERE id = :id');
+            $up->execute([':id' => $row['id']]);
+        } catch (\Throwable $e) { /* ignore */ }
+    } catch (\Throwable $e) {
+        http_response_code(500);
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'API key verification failed', 'detail' => $e->getMessage()]);
+        exit;
+    }
 }
 
 // ===========================

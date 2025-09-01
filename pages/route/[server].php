@@ -10,40 +10,130 @@ $setHead(<<<HTML
 <title> Routes - {$safeTitle}</title>
 HTML);
 
-// Build API URL (base-path aware)
-$appUrl = rtrim($config['web']['url'] ?? '', '/');
-$base = defined('BASE_PATH') ? rtrim(BASE_PATH, '/') : '';
-$root = $appUrl !== '' ? $appUrl : ($base !== '' ? $base : '');
-$url = $root . '/api/config/';
+// Direct Caddy Admin API URL
+$caddyUrl = rtrim($config['web']['caddy_url'] ?? 'http://127.0.0.1:2019', '/');
+$url = $caddyUrl . '/config/';
 
-// Fetch config
-if (PHP_SAPI === 'cli-server') {
-    $proxy = __DIR__ . '/../../api/caddy/index.php';
-    if (!defined('CADDY_PROXY_EMBED')) define('CADDY_PROXY_EMBED', true);
-    $backup = ['_SERVER' => $_SERVER];
-    $_SERVER['REQUEST_METHOD'] = 'GET';
-    $_SERVER['PATH_INFO'] = '/config/';
-    $_SERVER['QUERY_STRING'] = '';
-    ob_start();
-    include $proxy;
-    $response = ob_get_clean();
-    $_SERVER = $backup['_SERVER'];
-} else {
-    $curl = curl_init();
-    curl_setopt_array($curl, array(
-        CURLOPT_URL => $url,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_ENCODING => '',
-        CURLOPT_MAXREDIRS => 10,
-        CURLOPT_CONNECTTIMEOUT => 2,
-        CURLOPT_TIMEOUT => 6,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-        CURLOPT_CUSTOMREQUEST => 'GET',
-    ));
-    $response = curl_exec($curl);
-    curl_close($curl);
+// Handle POST actions (PHP-only API calls to Caddy)
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+    $redirect = (defined('BASE_PATH') ? BASE_PATH : '') . '/route/' . urlencode($serverName);
+    $status = 'ok'; $msg = '';
+    try {
+        // 1) Load current config
+        $ch = curl_init($caddyUrl . '/config/');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 2,
+            CURLOPT_TIMEOUT => 6,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        ]);
+        $res = curl_exec($ch);
+        if ($res === false) throw new \RuntimeException('Failed to load config: ' . curl_error($ch));
+        $cfg = json_decode($res, true);
+        curl_close($ch);
+        if (!is_array($cfg)) throw new \RuntimeException('Invalid config JSON');
+
+        if (!isset($cfg['apps']['http']['servers'][$serverName])) {
+            throw new \RuntimeException('Server not found in config: ' . $serverName);
+        }
+        $srv =& $cfg['apps']['http']['servers'][$serverName];
+        if (!isset($srv['routes']) || !is_array($srv['routes'])) $srv['routes'] = [];
+
+        if ($action === 'save_route') {
+            $hostsRaw = (string)($_POST['hosts'] ?? '');
+            $hosts = array_values(array_filter(array_map(function($s){ return trim($s); }, preg_split('/[,\n\s]+/', $hostsRaw)), 'strlen'));
+            $dial = trim((string)($_POST['dial'] ?? ''));
+            $insecure = isset($_POST['insecure']) && $_POST['insecure'] == '1';
+            $editIndex = isset($_POST['edit_index']) && $_POST['edit_index'] !== '' ? (int)$_POST['edit_index'] : null;
+            if ($dial === '') throw new \RuntimeException('Missing dial');
+
+            $route = [ 'handle' => [ [ 'handler' => 'reverse_proxy', 'upstreams' => [ [ 'dial' => $dial ] ] ] ] ];
+            if ($insecure) {
+                $route['handle'][0]['transport'] = [ 'protocol' => 'http', 'tls' => [ 'insecure_skip_verify' => true ] ];
+            }
+            if (!empty($hosts)) { $route['match'] = [ [ 'host' => $hosts ] ]; }
+
+            if ($editIndex === null) {
+                $srv['routes'][] = $route;
+            } else {
+                // Merge into existing
+                $existing = $srv['routes'][$editIndex] ?? [];
+                $handles = isset($existing['handle']) && is_array($existing['handle']) ? $existing['handle'] : [];
+                // find reverse_proxy
+                $found = false;
+                foreach ($handles as &$h) {
+                    if (is_array($h) && ($h['handler'] ?? '') === 'reverse_proxy') {
+                        $h['upstreams'] = [ [ 'dial' => $dial ] ];
+                        if ($insecure) {
+                            $h['transport'] = [ 'protocol' => 'http', 'tls' => [ 'insecure_skip_verify' => true ] ];
+                        } else {
+                            if (isset($h['transport'])) unset($h['transport']);
+                        }
+                        $found = true; break;
+                    }
+                }
+                unset($h);
+                if (!$found) { $handles[] = [ 'handler' => 'reverse_proxy', 'upstreams' => [ [ 'dial' => $dial ] ] ]; }
+                $existing['handle'] = $handles;
+                if (!empty($hosts)) $existing['match'] = [ [ 'host' => $hosts ] ]; else if (isset($existing['match'])) unset($existing['match']);
+                $srv['routes'][$editIndex] = $existing;
+            }
+        } elseif ($action === 'delete_route') {
+            $idx = isset($_POST['idx']) ? (int)$_POST['idx'] : -1;
+            if ($idx < 0 || $idx >= count($srv['routes'])) throw new \RuntimeException('Invalid route index');
+            array_splice($srv['routes'], $idx, 1);
+        } else {
+            throw new \RuntimeException('Unknown action');
+        }
+
+        // 3) POST full config back to /load
+        $ch2 = curl_init($caddyUrl . '/load');
+        curl_setopt_array($ch2, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 2,
+            CURLOPT_TIMEOUT => 10,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Accept: application/json'],
+            CURLOPT_POSTFIELDS => json_encode($cfg),
+        ]);
+        $res2 = curl_exec($ch2);
+        if ($res2 === false) throw new \RuntimeException('Update failed: ' . curl_error($ch2));
+        $code2 = curl_getinfo($ch2, CURLINFO_HTTP_CODE) ?: 500;
+        curl_close($ch2);
+        if ($code2 < 200 || $code2 >= 300) {
+            $body = (string)$res2;
+            $msg = 'Caddy responded ' . $code2 . ' ' . $body;
+            $status = 'error';
+        }
+    } catch (\Throwable $e) {
+        $status = 'error';
+        $msg = $e->getMessage();
+    }
+    // Redirect with status
+    $qs = 'status=' . urlencode($status) . ($msg !== '' ? ('&msg=' . urlencode($msg)) : '');
+    header('Location: ' . $redirect . '?' . $qs);
+    exit;
 }
+
+// Fetch config directly from Caddy
+$curl = curl_init();
+curl_setopt_array($curl, array(
+    CURLOPT_URL => $url,
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_ENCODING => '',
+    CURLOPT_MAXREDIRS => 10,
+    CURLOPT_CONNECTTIMEOUT => 2,
+    CURLOPT_TIMEOUT => 6,
+    CURLOPT_FOLLOWLOCATION => true,
+    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+    CURLOPT_CUSTOMREQUEST => 'GET',
+));
+$response = curl_exec($curl);
+curl_close($curl);
 
 $data = json_decode($response ?? '', true);
 
@@ -165,8 +255,29 @@ function extract_dials($route) {
                             </td>
                             <td class="text-theme"><?= htmlspecialchars(extract_dials($r)) ?></td>
                             <td class="space-x-1">
-                                <button class="btnEditRoute px-2 py-1 rounded bg-amber-500 text-white text-xs hover:bg-amber-600" data-idx="<?= $i ?>">Edit</button>
-                                <button class="btnDeleteRoute px-2 py-1 rounded bg-red-600 text-white text-xs hover:bg-red-700" data-idx="<?= $i ?>">Delete</button>
+                                <?php
+                                    // Prepare prefill data
+                                    $prefillHosts = implode(', ', extract_hosts_array($r));
+                                    $prefillDial = extract_dials($r);
+                                    $insecure = false;
+                                    if (!empty($r['handle']) && is_array($r['handle'])) {
+                                        foreach ($r['handle'] as $h) {
+                                            if (is_array($h) && ($h['handler'] ?? '') === 'reverse_proxy') {
+                                                if (!empty($h['transport']['tls']['insecure_skip_verify'])) { $insecure = true; }
+                                            }
+                                        }
+                                    }
+                                ?>
+                                <button class="btnEditRoute px-2 py-1 rounded bg-amber-500 text-white text-xs hover:bg-amber-600"
+                                    data-idx="<?= $i ?>"
+                                    data-hosts="<?= htmlspecialchars($prefillHosts) ?>"
+                                    data-dial="<?= htmlspecialchars($prefillDial) ?>"
+                                    data-insecure="<?= $insecure ? '1' : '0' ?>">Edit</button>
+                                <form method="post" class="inline formDeleteRoute">
+                                    <input type="hidden" name="action" value="delete_route" />
+                                    <input type="hidden" name="idx" value="<?= $i ?>" />
+                                    <button type="submit" class="px-2 py-1 rounded bg-red-600 text-white text-xs hover:bg-red-700">Delete</button>
+                                </form>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -178,6 +289,7 @@ function extract_dials($route) {
 
 <script>
 $(function(){
+    const caddyUrl = '<?= addslashes($caddyUrl) ?>';
     if ($.fn.DataTable) {
         $('#routesTable').DataTable({
             responsive: true,
@@ -202,43 +314,16 @@ $(function(){
     $(document).on('click', '.btnEditRoute', async function(){
         const idx = parseInt($(this).data('idx'));
         if (Number.isNaN(idx)) return;
-        const base = '<?= defined('BASE_PATH') ? addslashes(BASE_PATH) : '' ?>';
-        try {
-            const getRes = await fetch(base + '/api/caddy/config/', { headers: { 'Accept': 'application/json' } });
-            let cfg = null; let getText = '';
-            try { cfg = await getRes.json(); } catch { try { getText = await getRes.text(); } catch { getText=''; } }
-            if (!getRes.ok || !cfg || typeof cfg !== 'object') throw new Error(getText || 'Failed to load config');
-            const srv = cfg.apps && cfg.apps.http && cfg.apps.http.servers ? cfg.apps.http.servers[serverName] : null;
-            if (!srv || !Array.isArray(srv.routes) || !srv.routes[idx]) throw new Error('Route not found');
-            const r = srv.routes[idx];
-            // Prefill hosts
-            let hs = [];
-            if (Array.isArray(r.match)) {
-                r.match.forEach(m => { if (m && m.host) hs.push(...[].concat(m.host)); });
-            }
-            // Prefill dial from reverse_proxy
-            let d = '';
-            if (Array.isArray(r.handle)) {
-                const rp = r.handle.find(h => h && h.handler === 'reverse_proxy');
-                if (rp && Array.isArray(rp.upstreams) && rp.upstreams[0] && rp.upstreams[0].dial) d = rp.upstreams[0].dial;
-            }
-            // Prefill insecure
-            let ins = false;
-            if (Array.isArray(r.handle)) {
-                const rp = r.handle.find(h => h && h.handler === 'reverse_proxy');
-                if (rp && rp.transport && rp.transport.tls && rp.transport.tls.insecure_skip_verify) ins = true;
-            }
-
-            $('#hosts').val(hs.join(', '));
-            $('#dial').val(d);
-            $('#insecure').prop('checked', !!ins);
-            editIndex = idx;
-            $('#modalTitle').text('Edit Route · ' + serverName);
-            modal.removeClass('hidden');
-            setTimeout(() => { $('#hosts').trigger('focus'); }, 0);
-        } catch (err) {
-            Swal.fire({ icon: 'error', title: 'Load route failed', text: (err && err.message ? err.message : String(err)) });
-        }
+        const hosts = $(this).data('hosts') || '';
+        const dial = $(this).data('dial') || '';
+        const insecure = String($(this).data('insecure') || '0') === '1';
+        $('#hosts').val(hosts);
+        $('#dial').val(dial);
+        $('#insecure').prop('checked', insecure);
+        editIndex = idx;
+        $('#modalTitle').text('Edit Route · ' + serverName);
+        modal.removeClass('hidden');
+        setTimeout(() => { $('#hosts').trigger('focus'); }, 0);
     });
     }
     // Modal logic
@@ -251,6 +336,8 @@ $(function(){
         $('#insecure').prop('checked', false);
         editIndex = null;
         $('#modalTitle').text('Add Route · ' + serverName);
+        $('#formAction').val('save_route');
+        $('#editIndex').val('');
     }
 
     $('#btnOpenAddRoute').on('click', function(){
@@ -259,81 +346,11 @@ $(function(){
         setTimeout(() => { $('#hosts').trigger('focus'); }, 0);
     });
     $('#btnCloseAddRoute, #btnCloseAddRoute2, #addRouteBackdrop').on('click', function(){ modal.addClass('hidden'); resetForm(); });
-    $('#formAddRoute').on('submit', async function(e){
-        e.preventDefault();
-        const server = serverName;
-        const hostsRaw = $('#hosts').val() || '';
-        let hosts = hostsRaw.split(/[,\n\s]+/).map(s => s.trim()).filter(Boolean);
-        const dial = ($('#dial').val() || '').trim();
-        const insecure = $('#insecure').is(':checked');
-        if (!dial) { await Swal.fire({ icon:'warning', title:'Missing dial', text:'Please enter dial' }); return; }
-        const base = '<?= defined('BASE_PATH') ? addslashes(BASE_PATH) : '' ?>';
-        try {
-            // 1) GET current config via proxy
-            const getRes = await fetch(base + '/api/caddy/config/', { headers: { 'Accept': 'application/json' } });
-            let cfg = null; let getText = '';
-            try { cfg = await getRes.json(); } catch { try { getText = await getRes.text(); } catch { getText=''; } }
-            if (!getRes.ok || !cfg || typeof cfg !== 'object') {
-                throw new Error(getText || 'Failed to load config');
-            }
-
-            // 2) Build or update route
-            let route = { handle: [ { handler: 'reverse_proxy', upstreams: [ { dial } ] } ] };
-            if (insecure) {
-                route.handle[0].transport = { protocol: 'http', tls: { insecure_skip_verify: true } };
-            }
-            if (hosts && hosts.length) {
-                route.match = [ { host: hosts } ];
-            }
-
-            // 3) Append or update to selected server
-            if (!cfg.apps || !cfg.apps.http || !cfg.apps.http.servers || !cfg.apps.http.servers[server]) {
-                throw new Error('Server not found in config: ' + server);
-            }
-            const srv = cfg.apps.http.servers[server];
-            if (!Array.isArray(srv.routes)) srv.routes = [];
-            if (editIndex === null) {
-                // add
-                srv.routes.push(route);
-            } else {
-                // edit existing route at index
-                const existing = srv.routes[editIndex] || {};
-                // Preserve other handlers but ensure reverse_proxy exists and set
-                let handles = Array.isArray(existing.handle) ? existing.handle : [];
-                let rp = handles.find(h => h && h.handler === 'reverse_proxy');
-                if (!rp) { rp = { handler: 'reverse_proxy' }; handles.push(rp); }
-                rp.upstreams = [ { dial } ];
-                if (insecure) {
-                    rp.transport = { protocol: 'http', tls: { insecure_skip_verify: true } };
-                } else {
-                    if (rp.transport) delete rp.transport;
-                }
-                // Match hosts
-                if (hosts && hosts.length) {
-                    existing.match = [ { host: hosts } ];
-                } else {
-                    if (existing.match) delete existing.match;
-                }
-                existing.handle = handles;
-                srv.routes[editIndex] = existing;
-            }
-
-            // 4) POST full config back via proxy to /load (preferred for full replace)
-            const putRes = await fetch(base + '/api/caddy/load', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify(cfg)
-            });
-            let putData = null; let putText = '';
-            try { putData = await putRes.json(); } catch { try { putText = await putRes.text(); } catch { putText=''; } }
-            if (!putRes.ok) {
-                const msg = (putData && (putData.error || putData.body)) || putText || 'Update failed';
-                throw new Error(msg);
-            }
-            location.reload();
-        } catch (err) {
-            Swal.fire({ icon: 'error', title: 'Add route failed', text: (err && err.message ? err.message : String(err)) });
-        }
+    // When submitting, set hidden edit index and let the browser POST
+    $('#formAddRoute').on('submit', function(){
+        $('#formAction').val('save_route');
+        $('#editIndex').val(editIndex === null ? '' : String(editIndex));
+        return true;
     });
 
     // Keyboard shortcuts while modal is open
@@ -346,52 +363,43 @@ $(function(){
         }
     });
 
-    // Delete route handler (via proxy only)
-    $(document).on('click', '.btnDeleteRoute', async function(){
-        const idx = parseInt($(this).data('idx'));
-        if (Number.isNaN(idx)) return;
-        const conf = await Swal.fire({
-            icon: 'warning',
-            title: 'Delete route #' + (idx + 1) + '?',
-            text: 'This action cannot be undone.',
-            showCancelButton: true,
-            confirmButtonText: 'Delete',
-            cancelButtonText: 'Cancel',
-            confirmButtonColor: '#dc2626'
-        });
-        if (!conf.isConfirmed) return;
-        const server = '<?= addslashes($serverName) ?>';
-        const base = '<?= defined('BASE_PATH') ? addslashes(BASE_PATH) : '' ?>';
+    // SweetAlert2: show status alerts from query params
+    (async function(){
         try {
-            // 1) GET current config
-            const getRes = await fetch(base + '/api/caddy/config/', { headers: { 'Accept': 'application/json' } });
-            let cfg = null; let getText = '';
-            try { cfg = await getRes.json(); } catch { try { getText = await getRes.text(); } catch { getText=''; } }
-            if (!getRes.ok || !cfg || typeof cfg !== 'object') throw new Error(getText || 'Failed to load config');
-
-            // 2) Remove route by index
-            if (!cfg.apps || !cfg.apps.http || !cfg.apps.http.servers || !cfg.apps.http.servers[server]) throw new Error('Server not found: ' + server);
-            const srv = cfg.apps.http.servers[server];
-            if (!Array.isArray(srv.routes)) throw new Error('Routes list not found');
-            if (idx < 0 || idx >= srv.routes.length) throw new Error('Route index out of range');
-            srv.routes.splice(idx, 1);
-
-            // 3) POST full config to /load
-            const putRes = await fetch(base + '/api/caddy/load', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify(cfg)
-            });
-            let putData = null; let putText = '';
-            try { putData = await putRes.json(); } catch { try { putText = await putRes.text(); } catch { putText=''; } }
-            if (!putRes.ok) {
-                const msg = (putData && (putData.error || putData.body)) || putText || 'Delete failed';
-                throw new Error(msg);
+            const usp = new URLSearchParams(window.location.search);
+            const status = usp.get('status');
+            const msg = usp.get('msg') || '';
+            if (status) {
+                await Swal.fire({
+                    icon: status === 'ok' ? 'success' : 'error',
+                    title: status === 'ok' ? 'Success' : 'Error',
+                    text: msg
+                });
+                usp.delete('status');
+                usp.delete('msg');
+                const newUrl = window.location.pathname + (usp.toString() ? ('?' + usp.toString()) : '');
+                history.replaceState({}, '', newUrl);
             }
-            location.reload();
-        } catch (err) {
-            Swal.fire({ icon: 'error', title: 'Delete route failed', text: (err && err.message ? err.message : String(err)) });
-        }
+        } catch (e) { /* no-op */ }
+    })();
+
+    // SweetAlert2: confirm delete route
+    $(document).on('submit', '.formDeleteRoute', async function(e){
+        e.preventDefault();
+        const form = this;
+        const idx = $(form).find('input[name="idx"]').val() || '';
+        try {
+            const res = await Swal.fire({
+                icon: 'warning',
+                title: 'Delete route',
+                text: idx ? ('Delete route #' + (parseInt(idx,10)+1) + ' ?') : 'Delete this route?',
+                showCancelButton: true,
+                confirmButtonText: 'Delete',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#dc2626'
+            });
+            if (res.isConfirmed) form.submit();
+        } catch(_) { /* no-op */ }
     });
 });
 </script>
@@ -405,17 +413,19 @@ $(function(){
                 <h3 id="modalTitle" class="text-lg font-semibold text-theme">Add Route · <?= htmlspecialchars($serverName) ?></h3>
                 <button id="btnCloseAddRoute" class="px-3 py-1.5 rounded text-theme hover:bg-slate-700/50">✕</button>
             </div>
-            <form id="formAddRoute" class="p-4 space-y-4">
+            <form id="formAddRoute" method="post" class="p-4 space-y-4">
+                <input type="hidden" name="action" id="formAction" value="save_route" />
+                <input type="hidden" name="edit_index" id="editIndex" value="" />
                 <div>
                     <label for="hosts" class="block text-sm mb-1 text-theme">Hosts (comma or newline separated)</label>
-                    <textarea id="hosts" class="w-full input-theme rounded-[14px] text-sm h-[90px]" rows="2" placeholder="example.com, api.example.com"></textarea>
+                    <textarea id="hosts" name="hosts" class="w-full input-theme rounded-[14px] text-sm h-[90px]" rows="2" placeholder="example.com, api.example.com"></textarea>
                 </div>
                 <div>
                     <label for="dial" class="block text-sm mb-1 text-theme">Dial (ip[:port])</label>
-                    <input id="dial" type="text" class="w-full input-theme rounded-[55px] text-center text-[16px] h-[50px]" placeholder="52.63.187.129:3001" />
+                    <input id="dial" name="dial" type="text" class="w-full input-theme rounded-[55px] text-center text-[16px] h-[50px]" placeholder="52.63.187.129:3001" />
                 </div>
                 <div class="flex items-center gap-2">
-                    <input id="insecure" type="checkbox" class="h-4 w-4" />
+                    <input id="insecure" name="insecure" value="1" type="checkbox" class="h-4 w-4" />
                     <label for="insecure" class="text-sm text-theme">Insecure TLS (skip verify)</label>
                 </div>
                 <div class="pt-2 flex justify-end gap-2">

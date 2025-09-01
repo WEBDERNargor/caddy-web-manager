@@ -6,40 +6,24 @@ $setHead(<<<HTML
 <title> All Routes - {$config['web']['name']}</title>
 HTML);
 
-// Build API URL (base-path aware)
-$appUrl = rtrim($config['web']['url'] ?? '', '/');
-$base = defined('BASE_PATH') ? rtrim(BASE_PATH, '/') : '';
-$root = $appUrl !== '' ? $appUrl : ($base !== '' ? $base : '');
-$url = $root . '/api/config/';
+// Direct Caddy Admin API URL
+$caddyUrl = rtrim($config['web']['caddy_url'] ?? 'http://127.0.0.1:2019', '/');
+$url = $caddyUrl . '/config/';
 
-// Fetch config
-if (PHP_SAPI === 'cli-server') {
-    $proxy = __DIR__ . '/../../api/caddy/index.php';
-    if (!defined('CADDY_PROXY_EMBED')) define('CADDY_PROXY_EMBED', true);
-    $backup = ['_SERVER' => $_SERVER];
-    $_SERVER['REQUEST_METHOD'] = 'GET';
-    $_SERVER['PATH_INFO'] = '/config/';
-    $_SERVER['QUERY_STRING'] = '';
-    ob_start();
-    include $proxy;
-    $response = ob_get_clean();
-    $_SERVER = $backup['_SERVER'];
-} else {
-    $curl = curl_init();
-    curl_setopt_array($curl, array(
-        CURLOPT_URL => $url,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_ENCODING => '',
-        CURLOPT_MAXREDIRS => 10,
-        CURLOPT_CONNECTTIMEOUT => 2,
-        CURLOPT_TIMEOUT => 6,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-        CURLOPT_CUSTOMREQUEST => 'GET',
-    ));
-    $response = curl_exec($curl);
-    curl_close($curl);
-}
+$curl = curl_init();
+curl_setopt_array($curl, array(
+    CURLOPT_URL => $url,
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_ENCODING => '',
+    CURLOPT_MAXREDIRS => 10,
+    CURLOPT_CONNECTTIMEOUT => 2,
+    CURLOPT_TIMEOUT => 6,
+    CURLOPT_FOLLOWLOCATION => true,
+    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+    CURLOPT_CUSTOMREQUEST => 'GET',
+));
+$response = curl_exec($curl);
+curl_close($curl);
 
 $data = json_decode($response ?? '', true);
 

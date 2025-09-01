@@ -1,0 +1,12 @@
+# Exclude unnecessary files from build context
+vendor/
+composer.lock
+node_modules/
+.git/
+.gitignore
+storage/
+/data/
+/config/
+/public/uploads/
+.DS_Store
+*.log

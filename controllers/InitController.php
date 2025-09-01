@@ -28,6 +28,18 @@ class InitController
             );
         ");
 
+        // API keys table for external access to proxy endpoints
+        $this->db->exec("
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token TEXT UNIQUE NOT NULL,
+                label TEXT,
+                active INTEGER DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                last_used_at DATETIME
+            );
+        ");
+
         $stmt = $this->db->prepare("SELECT COUNT(*) FROM users WHERE username = 'admin'");
         $stmt->execute();
         if ($stmt->fetchColumn() == 0) {

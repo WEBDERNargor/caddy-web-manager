@@ -1,0 +1,40 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: caddy_web_manager_app
+    restart: unless-stopped
+    ports:
+      - "81:8000"   # Host 81 -> Container 8000 (Apache)
+    environment:
+      WEB_MODE: production
+      WEB_URL: "/"
+      CADDY_URL: "http://caddy:2019"  # App talks to Caddy Admin API via service name
+      COMPOSER_MEMORY_LIMIT: -1
+      # Set DB envs as needed or use SQLITE (see config.php)
+      # DB_DRIVER: sqlite
+    volumes:
+      - ./:/var/www/html
+      - ./docker.env:/var/www/html/.env:ro
+      - vendor:/var/www/html/vendor
+    depends_on:
+      - caddy
+
+  caddy:
+    image: caddy:2
+    container_name: caddy_server
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "2019:2019"   # ✅ Admin API
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./data:/data
+      - ./config:/config
+
+volumes:
+  vendor:

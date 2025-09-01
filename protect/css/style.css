@@ -1,4 +1,3 @@
-
 :root{
     --dark-body:#787878;
     --dark-bg:#262C35;
@@ -26,3 +25,4 @@
 .input-theme:focus{
     outline:none;
 }
+

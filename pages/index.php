@@ -6,40 +6,104 @@ $setHead(<<<HTML
 <title> Home - {$config['web']['name']}</title>
 HTML);
 
-$appUrl = rtrim($config['web']['url'] ?? '', '/');
-$base = defined('BASE_PATH') ? rtrim(BASE_PATH, '/') : '';
-$root = $appUrl !== '' ? $appUrl : ($base !== '' ? $base : '');
-$url = $root . '/api/config/';
+$caddyUrl = rtrim($config['web']['caddy_url'] ?? 'http://127.0.0.1:2019', '/');
+$url = $caddyUrl . '/config/';
 
-if (PHP_SAPI === 'cli-server') {
-    $proxy = __DIR__ . '/../api/caddy/index.php';
-    if (!defined('CADDY_PROXY_EMBED')) {
-        define('CADDY_PROXY_EMBED', true);
+// Handle POST actions (PHP does all API calls)
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+    $redirect = (defined('BASE_PATH') ? BASE_PATH : '') . '/';
+    $status = 'ok'; $msg = '';
+    try {
+        // Load current config
+        $ch = curl_init($caddyUrl . '/config/');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 2,
+            CURLOPT_TIMEOUT => 6,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        ]);
+        $res = curl_exec($ch);
+        if ($res === false) throw new \RuntimeException('Failed to load config: ' . curl_error($ch));
+        $cfg = json_decode($res, true);
+        curl_close($ch);
+        if (!is_array($cfg)) throw new \RuntimeException('Invalid config JSON');
+
+        if (!isset($cfg['apps'])) $cfg['apps'] = [];
+        if (!isset($cfg['apps']['http'])) $cfg['apps']['http'] = [];
+        if (!isset($cfg['apps']['http']['servers']) || !is_array($cfg['apps']['http']['servers'])) $cfg['apps']['http']['servers'] = [];
+        $servers =& $cfg['apps']['http']['servers'];
+
+        if ($action === 'delete_server') {
+            $name = (string)($_POST['name'] ?? '');
+            if ($name === '' || !isset($servers[$name])) throw new \RuntimeException('Server not found: ' . $name);
+            unset($servers[$name]);
+        } elseif ($action === 'save_server') {
+            $orig = (string)($_POST['original_name'] ?? '');
+            $name = trim((string)($_POST['name'] ?? ''));
+            $port = trim((string)($_POST['port'] ?? ''));
+            if ($name === '') throw new \RuntimeException('Missing server name');
+            // derive listen address
+            $listen = $port === '' ? ':80' : (strpos($port, ':') !== false ? $port : (':' . $port));
+            if ($orig === '') {
+                // create new (not exposed in UI, but supported)
+                if (isset($servers[$name])) throw new \RuntimeException('Server already exists: ' . $name);
+                $servers[$name] = [ 'listen' => [ $listen ], 'routes' => [] ];
+            } else {
+                if (!isset($servers[$orig])) throw new \RuntimeException('Server not found: ' . $orig);
+                // rename if needed
+                if ($name !== $orig) {
+                    if (isset($servers[$name])) throw new \RuntimeException('Target name already exists: ' . $name);
+                    $servers[$name] = $servers[$orig];
+                    unset($servers[$orig]);
+                }
+                if (!isset($servers[$name]['listen']) || !is_array($servers[$name]['listen'])) $servers[$name]['listen'] = [];
+                $servers[$name]['listen'] = [ $listen ];
+            }
+        } else {
+            throw new \RuntimeException('Unknown action');
+        }
+
+        // Save config
+        $ch2 = curl_init($caddyUrl . '/load');
+        curl_setopt_array($ch2, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 2,
+            CURLOPT_TIMEOUT => 10,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Accept: application/json'],
+            CURLOPT_POSTFIELDS => json_encode($cfg),
+        ]);
+        $res2 = curl_exec($ch2);
+        if ($res2 === false) throw new \RuntimeException('Update failed: ' . curl_error($ch2));
+        $code2 = curl_getinfo($ch2, CURLINFO_HTTP_CODE) ?: 500;
+        curl_close($ch2);
+        if ($code2 < 200 || $code2 >= 300) { $status = 'error'; $msg = 'Caddy responded ' . $code2 . ' ' . (string)$res2; }
+    } catch (\Throwable $e) {
+        $status = 'error'; $msg = $e->getMessage();
     }
-    $backup = ['_SERVER' => $_SERVER];
-    $_SERVER['REQUEST_METHOD'] = 'GET';
-    $_SERVER['PATH_INFO'] = '/config/';
-    $_SERVER['QUERY_STRING'] = '';
-    ob_start();
-    include $proxy;
-    $response = ob_get_clean();
-    $_SERVER = $backup['_SERVER'];
-} else {
-    $curl = curl_init();
-    curl_setopt_array($curl, array(
-        CURLOPT_URL => $url,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_ENCODING => '',
-        CURLOPT_MAXREDIRS => 10,
-        CURLOPT_CONNECTTIMEOUT => 2,
-        CURLOPT_TIMEOUT => 6,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-        CURLOPT_CUSTOMREQUEST => 'GET',
-    ));
-    $response = curl_exec($curl);
-    curl_close($curl);
+    $qs = 'status=' . urlencode($status) . ($msg !== '' ? ('&msg=' . urlencode($msg)) : '');
+    header('Location: ' . $redirect . '?' . $qs);
+    exit;
 }
+
+$curl = curl_init();
+curl_setopt_array($curl, array(
+    CURLOPT_URL => $url,
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_ENCODING => '',
+    CURLOPT_MAXREDIRS => 10,
+    CURLOPT_CONNECTTIMEOUT => 2,
+    CURLOPT_TIMEOUT => 6,
+    CURLOPT_FOLLOWLOCATION => true,
+    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+    CURLOPT_CUSTOMREQUEST => 'GET',
+));
+$response = curl_exec($curl);
+curl_close($curl);
 
 $data = json_decode($response, true);
 $servers = [];
@@ -78,7 +142,7 @@ if (is_array($data)) {
 <div class="max-w-7xl mx-auto px-4 py-8">
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold">Servers</h1>
-        <button id="btnOpenAddServer" class="px-3 py-1.5 rounded bg-green-600 text-white text-sm hover:bg-green-700">+ Add Server</button>
+        <div></div>
     </div>
     <div class="bg-theme shadow rounded-lg p-4 overflow-x-auto">
         <table id="serversTable" class="min-w-full display nowrap stripe hover bg-theme" style="width:100%">
@@ -95,13 +159,21 @@ if (is_array($data)) {
                 <?php foreach ($servers as $i => $s): ?>
                     <tr>
                         <td><?= $i + 1 ?></td>
-                        <td class="text-theme"><?= htmlspecialchars($s['name']) ?></td>
+                        <td class="text-theme">
+                            <a class="hover:underline" href="<?= defined('BASE_PATH') ? BASE_PATH : '' ?>/route/<?= urlencode($s['name']) ?>">
+                                <?= htmlspecialchars($s['name']) ?>
+                            </a>
+                        </td>
                         <td class="text-theme"><?= htmlspecialchars($s['port']) ?></td>
                         <td class="space-x-1">
                             <a href="<?= defined('BASE_PATH') ? BASE_PATH : '' ?>/route/<?= urlencode($s['name']) ?>"
                                class="px-3 py-1 inline-block rounded bg-blue-600 text-white text-xs hover:bg-blue-700">View</a>
                             <button class="btnEditServer px-2 py-1 rounded bg-amber-500 text-white text-xs hover:bg-amber-600" data-name="<?= htmlspecialchars($s['name']) ?>" data-port="<?= htmlspecialchars($s['port']) ?>">Edit</button>
-                            <button class="btnDeleteServer px-2 py-1 rounded bg-red-600 text-white text-xs hover:bg-red-700" data-name="<?= htmlspecialchars($s['name']) ?>">Delete</button>
+                            <form method="post" class="inline formDeleteServer">
+                                <input type="hidden" name="action" value="delete_server" />
+                                <input type="hidden" name="name" value="<?= htmlspecialchars($s['name']) ?>" />
+                                <button type="submit" class="px-2 py-1 rounded bg-red-600 text-white text-xs hover:bg-red-700">Delete</button>
+                            </form>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -196,140 +268,97 @@ if (is_array($data)) {
             applyDTTheme();
         }, 50);
 
-        const base = '<?= defined('BASE_PATH') ? addslashes(BASE_PATH) : '' ?>';
         let editServerOriginal = null; 
 
-        function formatListen(port) {
-            const p = String(port || '').trim();
-            if (p === '') return ':80';
-            if (p.includes(':')) return p;
-            return ':' + p;
-        }
+        // SweetAlert2: show status alerts from query params
+        (async function(){
+            try {
+                const usp = new URLSearchParams(window.location.search);
+                const status = usp.get('status');
+                const msg = usp.get('msg') || '';
+                if (status) {
+                    await Swal.fire({
+                        icon: status === 'ok' ? 'success' : 'error',
+                        title: status === 'ok' ? 'Success' : 'Error',
+                        text: msg
+                    });
+                    usp.delete('status');
+                    usp.delete('msg');
+                    const newUrl = window.location.pathname + (usp.toString() ? ('?' + usp.toString()) : '');
+                    history.replaceState({}, '', newUrl);
+                }
+            } catch (e) { /* no-op */ }
+        })();
 
-        function openServerModal(title, name, port){
-            $('#serverModalTitle').text(title);
-            $('#serverName').val(name || '');
-            $('#serverPort').val(port || '');
+        // SweetAlert2: confirm delete
+        $(document).on('submit', '.formDeleteServer', async function(e){
+            e.preventDefault();
+            const form = this;
+            const name = $(form).find('input[name="name"]').val() || '';
+            try {
+                const res = await Swal.fire({
+                    icon: 'warning',
+                    title: 'Delete server',
+                    text: name ? ('Delete server "' + name + '" ?') : 'Delete this server?',
+                    showCancelButton: true,
+                    confirmButtonText: 'Delete',
+                    cancelButtonText: 'Cancel',
+                    confirmButtonColor: '#dc2626'
+                });
+                if (res.isConfirmed) form.submit();
+            } catch(_) { /* no-op */ }
+        });
+
+        // Open Edit modal
+        $(document).on('click', '.btnEditServer', function(){
+            const name = String($(this).data('name') || '');
+            const port = String($(this).data('port') || '');
+            editServerOriginal = name;
+            $('#serverModalTitle').text('Edit Server');
+            $('#serverName').val(name);
+            $('#serverPort').val(port);
+            $('#originalName').val(name);
             $('#serverModal').removeClass('hidden');
             setTimeout(() => { $('#serverName').trigger('focus'); }, 0);
-        }
-        function closeServerModal(){
+        });
+
+        // Close modal
+        $('#btnCloseServer, #btnCloseServer2, #serverBackdrop').on('click', function(){
             $('#serverModal').addClass('hidden');
             editServerOriginal = null;
             $('#serverName').val('');
             $('#serverPort').val('');
-        }
-
-        $('#btnOpenAddServer').on('click', function(){
-            editServerOriginal = null;
-            openServerModal('Add Server', '', '');
-        });
- 
-        $('#btnCloseServer, #btnCloseServer2, #serverBackdrop').on('click', function(){ closeServerModal(); });
-
-        $(document).on('click', '.btnEditServer', function(){
-            const name = $(this).data('name');
-            const port = $(this).data('port');
-            editServerOriginal = name;
-            openServerModal('Edit Server', name, port);
+            $('#originalName').val('');
         });
 
-        $(document).on('click', '.btnDeleteServer', async function(){
-            const name = String($(this).data('name') || '');
-            if (!name) return;
-            const conf = await Swal.fire({
-                icon: 'warning',
-                title: 'Delete server',
-                text: 'Delete server "' + name + '" ? This action cannot be undone.',
-                showCancelButton: true,
-                confirmButtonText: 'Delete',
-                cancelButtonText: 'Cancel',
-                confirmButtonColor: '#dc2626'
-            });
-            if (!conf.isConfirmed) return;
-            try {
-                const getRes = await fetch(base + '/api/caddy/config/', { headers: { 'Accept': 'application/json' } });
-                let cfg = null; let t = '';
-                try { cfg = await getRes.json(); } catch { try { t = await getRes.text(); } catch { t=''; } }
-                if (!getRes.ok || !cfg || typeof cfg !== 'object') throw new Error(t || 'Failed to load config');
-                if (!cfg.apps || !cfg.apps.http || !cfg.apps.http.servers || !cfg.apps.http.servers[name]) throw new Error('Server not found: ' + name);
-                delete cfg.apps.http.servers[name];
-                const putRes = await fetch(base + '/api/caddy/load', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(cfg)
-                });
-                let pt = ''; let pd = null; try { pd = await putRes.json(); } catch { try { pt = await putRes.text(); } catch { pt=''; } }
-                if (!putRes.ok) throw new Error((pd && (pd.error || pd.body)) || pt || 'Delete failed');
-                location.reload();
-            } catch (err) { Swal.fire({ icon: 'error', title: 'Delete server failed', text: (err && err.message ? err.message : String(err)) }); }
-        });
-
-        $('#serverForm').on('submit', async function(e){
-            e.preventDefault();
-            const name = String($('#serverName').val() || '').trim();
-            const port = String($('#serverPort').val() || '').trim();
-            if (!name) { await Swal.fire({ icon:'warning', title:'Missing name', text:'Please enter server name' }); return; }
-            try {
-                const getRes = await fetch(base + '/api/caddy/config/', { headers: { 'Accept': 'application/json' } });
-                let cfg = null; let t='';
-                try { cfg = await getRes.json(); } catch { try { t = await getRes.text(); } catch { t=''; } }
-                if (!getRes.ok || !cfg || typeof cfg !== 'object') throw new Error(t || 'Failed to load config');
-                if (!cfg.apps) cfg.apps = {};
-                if (!cfg.apps.http) cfg.apps.http = {};
-                if (!cfg.apps.http.servers) cfg.apps.http.servers = {};
-
-                const servers = cfg.apps.http.servers;
-                if (editServerOriginal === null) {
-                   
-                    if (servers[name]) throw new Error('Server already exists: ' + name);
-                    servers[name] = { listen: [ formatListen(port || ':80') ], routes: [] };
-                } else {
-             
-                    const orig = editServerOriginal;
-                    if (!servers[orig]) throw new Error('Server not found: ' + orig);
-                
-                    if (name !== orig) {
-                        if (servers[name]) throw new Error('Target name already exists: ' + name);
-                        servers[name] = servers[orig];
-                        delete servers[orig];
-                    }
-                  
-                    if (!servers[name].listen || !Array.isArray(servers[name].listen)) servers[name].listen = [];
-                    servers[name].listen = [ formatListen(port || ':80') ];
-                }
-
-                const putRes = await fetch(base + '/api/caddy/load', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(cfg)
-                });
-                let pt=''; let pd=null; try { pd = await putRes.json(); } catch { try { pt = await putRes.text(); } catch { pt=''; } }
-                if (!putRes.ok) throw new Error((pd && (pd.error || pd.body)) || pt || 'Save failed');
-                location.reload();
-            } catch (err) {
-                Swal.fire({ icon:'error', title:'Save server failed', text:(err && err.message ? err.message : String(err)) });
-            } finally {
-                closeServerModal();
-            }
+        // Validate form (simple)
+        $('#serverForm').on('submit', function(){
+            if (!$('#serverName').val()) { Swal.fire({ icon:'warning', title:'กรอกชื่อเซิร์ฟเวอร์' }); return false; }
+            return true;
         });
     });
 </script>
 
-
+<!-- Edit Server Modal -->
 <div id="serverModal" class="fixed inset-0 hidden" aria-hidden="true">
     <div id="serverBackdrop" class="absolute inset-0 bg-black/50"></div>
     <div class="absolute inset-0 flex items-center justify-center p-4">
         <div class="w-full max-w-md bg-theme shadow-xl rounded-lg overflow-hidden">
             <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
-                <h3 id="serverModalTitle" class="text-lg font-semibold text-theme">Add Server</h3>
+                <h3 id="serverModalTitle" class="text-lg font-semibold text-theme">Edit Server</h3>
                 <button id="btnCloseServer" class="px-3 py-1.5 rounded text-theme hover:bg-slate-700/50">✕</button>
             </div>
-            <form id="serverForm" class="p-4 space-y-4">
+            <form id="serverForm" method="post" class="p-4 space-y-4">
+                <input type="hidden" name="action" value="save_server" />
+                <input type="hidden" id="originalName" name="original_name" value="" />
                 <div>
                     <label for="serverName" class="block text-sm mb-1 text-theme">Server Name</label>
-                    <input id="serverName" type="text" class="w-full input-theme rounded-[10px] h-[40px] px-3" placeholder="srv0" />
+                    <input id="serverName" name="name" type="text" class="w-full input-theme rounded-[10px] h-[40px] px-3" placeholder="srv0" />
                 </div>
                 <div>
                     <label for="serverPort" class="block text-sm mb-1 text-theme">Port</label>
-                    <input id="serverPort" type="text" class="w-full input-theme rounded-[10px] h-[40px] px-3" placeholder=":80" />
-                    <p class="text-xs text-theme opacity-70 mt-1">Accepts ":443", "8080", or "0.0.0.0:8080"</p>
+                    <input id="serverPort" name="port" type="text" class="w-full input-theme rounded-[10px] h-[40px] px-3" placeholder=":80" />
+                    <p class="text-xs text-theme opacity-70 mt-1">รับค่า ":443", "8080" หรือ "0.0.0.0:8080"</p>
                 </div>
                 <div class="pt-2 flex justify-end gap-2">
                     <button type="button" id="btnCloseServer2" class="px-5 py-2 rounded-[50px] text-white text-sm bg-slate-600 hover:bg-slate-500">ยกเลิก</button>
@@ -338,5 +367,4 @@ if (is_array($data)) {
             </form>
         </div>
     </div>
-    
 </div>

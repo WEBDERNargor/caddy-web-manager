@@ -20,37 +20,13 @@ $config=getConfig();
         <div class="text-gray-900 font-medium tracking-tight text-theme"><a href="/"><?= $config['web']['name'] ?></a></div>
       </div>
 
-      <!-- Center: Dropdown Pills (Server, Route[, Users for admin]) -->
+      <!-- Center: Nav Pills (Servers[, Users for admin]) -->
       <div id="navItems" class="hidden md:flex items-center justify-center gap-6">
-        <!-- Server -->
-        <div class="relative" data-dropdown>
-          <button type="button" aria-haspopup="true" aria-expanded="false"
-                  class="bg-white text-gray-900 px-4 py-2 rounded-xl shadow-sm hover:shadow transition flex items-center gap-2"
-                  data-trigger>
-            <span>Server</span>
-            <span class="select-none transition-transform duration-150" data-caret>▼</span>
-          </button>
-          <div class="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg ring-1 ring-black/5 py-2 hidden z-50"
-               role="menu" aria-label="Server menu" data-menu>
-            <a id="btnOpenNewServer" class="block px-4 py-2 hover:bg-gray-50 text-sm text-gray-700" role="menuitem" tabindex="-1" href="javascript:void(0)">Add Server</a>
-            <a class="block px-4 py-2 hover:bg-gray-50 text-sm text-gray-700" role="menuitem" tabindex="-1" href="<?= defined('BASE_PATH') ? BASE_PATH : '' ?>/">Manage</a>
-          </div>
-        </div>
-
-        <!-- Route -->
-        <div class="relative" data-dropdown>
-          <button type="button" aria-haspopup="true" aria-expanded="false"
-                  class="bg-white text-gray-900 px-4 py-2 rounded-xl shadow-sm hover:shadow transition flex items-center gap-2"
-                  data-trigger>
-            <span>Route</span>
-            <span class="select-none transition-transform duration-150" data-caret>▼</span>
-          </button>
-          <div class="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg ring-1 ring-black/5 py-2 hidden z-50"
-               role="menu" aria-label="Route menu" data-menu>
-            <a id="btnOpenNewRoute" class="block px-4 py-2 hover:bg-gray-50 text-sm text-gray-700" role="menuitem" tabindex="-1" href="javascript:void(0)">New Route</a>
-            <a class="block px-4 py-2 hover:bg-gray-50 text-sm text-gray-700" role="menuitem" tabindex="-1" href="<?= defined('BASE_PATH') ? BASE_PATH : '' ?>/route/">Manage</a>
-          </div>
-        </div>
+        <!-- Servers pill -->
+        <a href="<?= defined('BASE_PATH') ? BASE_PATH : '' ?>/"
+           class="nav-pill bg-white text-gray-900 px-4 py-2 rounded-xl shadow-sm hover:shadow transition flex items-center gap-2">
+          <span>Servers</span>
+        </a>
         <?php
           $__isAdmin = isset($_SESSION['user_data']) && isset($_SESSION['user_data']['role']) && $_SESSION['user_data']['role'] === 'admin';
           if ($__isAdmin):
@@ -59,6 +35,11 @@ $config=getConfig();
         <a href="/users/"
            class="nav-pill bg-white text-gray-900 px-4 py-2 rounded-xl shadow-sm hover:shadow transition flex items-center gap-2">
           <span>Users</span>
+        </a>
+        <!-- API Keys (admin only) -->
+        <a href="<?= defined('BASE_PATH') ? BASE_PATH : '' ?>/api-keys/"
+           class="nav-pill bg-white text-gray-900 px-4 py-2 rounded-xl shadow-sm hover:shadow transition flex items-center gap-2">
+          <span>API Keys</span>
         </a>
         <?php endif; ?>
       </div>
@@ -85,225 +66,10 @@ $config=getConfig();
   </div>
 </nav>
 
-<!-- New Route Modal -->
-<div id="newRouteModal" class="fixed inset-0 z-[1000] hidden" aria-hidden="true">
-  <div id="newRouteBackdrop" class="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity"></div>
-  <div class="absolute inset-0 flex items-center justify-center p-4">
-    <div id="newRoutePanel" class="w-full max-w-md bg-theme shadow-2xl rounded-2xl overflow-hidden transform transition-all duration-200 ease-out opacity-0 scale-95">
-      <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
-        <h3 class="text-lg font-semibold text-theme">New Route</h3>
-        <button id="btnCloseNewRoute" class="px-3 py-1.5 rounded text-theme hover:bg-slate-700/50">✕</button>
-      </div>
-      <form id="formNewRoute" class="p-4 space-y-4">
-        <div>
-          <label for="selectServer" class="block text-sm mb-1 text-theme">Select Server</label>
-          <select id="selectServer" class="w-full input-theme rounded-[10px] h-[40px] px-3">
-            <option value="" selected disabled>-- Choose server --</option>
-          </select>
-        </div>
-        <div>
-          <label for="nr_hosts" class="block text-sm mb-1 text-theme">Hosts (comma or newline separated)</label>
-          <textarea id="nr_hosts" class="w-full input-theme rounded-[14px] text-sm h-[90px]" rows="2" placeholder="example.com, api.example.com"></textarea>
-        </div>
-        <div>
-          <label for="nr_dial" class="block text-sm mb-1 text-theme">Dial (ip[:port])</label>
-          <input id="nr_dial" type="text" class="w-full input-theme rounded-[55px] text-center text-[16px] h-[50px]" placeholder="52.63.187.129:3001" />
-        </div>
-        <div class="flex items-center gap-2">
-          <input id="nr_insecure" type="checkbox" class="h-4 w-4" />
-          <label for="nr_insecure" class="text-sm text-theme">Insecure TLS (skip verify)</label>
-        </div>
-        <div class="pt-2 flex justify-end gap-2">
-          <button type="button" id="btnCloseNewRoute2" class="px-5 py-2 rounded-[50px] text-white text-sm bg-slate-600 hover:bg-slate-500">ยกเลิก</button>
-          <button type="submit" class="px-5 py-2 rounded-[50px] bg-[#506BF4] text-white text-sm hover:opacity-90">บันทึก</button>
-        </div>
-      </form>
-    </div>
-  </div>
-  
-</div>
-
-<script>
-(function(){
-  const base = '<?= defined('BASE_PATH') ? addslashes(BASE_PATH) : '' ?>';
-  const $modal = $('#newRouteModal');
-  const $panel = $('#newRoutePanel');
-  const $select = $('#selectServer');
-  const $hosts = $('#nr_hosts');
-  const $dial = $('#nr_dial');
-  const $insecure = $('#nr_insecure');
-
-  async function loadServers(){
-    try {
-      const res = await fetch(base + '/api/caddy/config/', { headers: { 'Accept': 'application/json' } });
-      let cfg = null; let t='';
-      try { cfg = await res.json(); } catch { try { t = await res.text(); } catch { t=''; } }
-      if (!res.ok || !cfg || typeof cfg !== 'object') throw new Error(t || 'Failed to load config');
-      const servers = (cfg.apps && cfg.apps.http && cfg.apps.http.servers) ? cfg.apps.http.servers : {};
-      $select.empty();
-      $select.append('<option value="" disabled selected>-- Choose server --</option>');
-      Object.keys(servers).forEach(name => {
-        $select.append('<option value="' + name.replace(/"/g,'&quot;') + '">' + name + '</option>');
-      });
-    } catch (err) {
-      Swal.fire({ icon: 'error', title: 'Load servers failed', text: (err && err.message ? err.message : String(err)) });
-    }
-  }
-
-  function openModal(){
-    $modal.removeClass('hidden');
-    // animate in
-    requestAnimationFrame(() => {
-      $panel.removeClass('opacity-0 scale-95').addClass('opacity-100 scale-100');
-    });
-    $('body').addClass('overflow-hidden');
-  }
-  function closeModal(){
-    // animate out
-    $panel.addClass('opacity-0 scale-95').removeClass('opacity-100 scale-100');
-    setTimeout(() => { $modal.addClass('hidden'); $('body').removeClass('overflow-hidden'); }, 150);
-  }
-
-  $('#btnOpenNewRoute').on('click', function(){
-    openModal();
-    loadServers();
-  });
-  $('#btnCloseNewRoute, #btnCloseNewRoute2, #newRouteBackdrop').on('click', function(){
-    closeModal();
-  });
-  $(document).on('keydown', function(e){ if (e.key === 'Escape' && !$modal.hasClass('hidden')) closeModal(); });
-  $('#formNewRoute').on('submit', async function(e){
-    e.preventDefault();
-    const server = String($select.val() || '').trim();
-    const hostsRaw = String($hosts.val() || '');
-    let hosts = hostsRaw.split(/[\,\n\s]+/).map(s => s.trim()).filter(Boolean);
-    const dial = String($dial.val() || '').trim();
-    const insecure = !!$insecure.is(':checked');
-    if (!server) { await Swal.fire({ icon:'warning', title:'Missing server', text:'Please select a server' }); return; }
-    if (!dial) { await Swal.fire({ icon:'warning', title:'Missing dial', text:'Please enter dial' }); return; }
-    try {
-      // Load current config
-      const getRes = await fetch(base + '/api/caddy/config/', { headers: { 'Accept': 'application/json' } });
-      let cfg = null; let t='';
-      try { cfg = await getRes.json(); } catch { try { t = await getRes.text(); } catch { t=''; } }
-      if (!getRes.ok || !cfg || typeof cfg !== 'object') throw new Error(t || 'Failed to load config');
-      if (!cfg.apps || !cfg.apps.http || !cfg.apps.http.servers || !cfg.apps.http.servers[server]) throw new Error('Server not found: ' + server);
-      const srv = cfg.apps.http.servers[server];
-      if (!Array.isArray(srv.routes)) srv.routes = [];
-      // Build route
-      let route = { handle: [ { handler: 'reverse_proxy', upstreams: [ { dial } ] } ] };
-      if (insecure) {
-        route.handle[0].transport = { protocol: 'http', tls: { insecure_skip_verify: true } };
-      }
-      if (hosts && hosts.length) {
-        route.match = [ { host: hosts } ];
-      }
-      // Append
-      srv.routes.push(route);
-      // Save
-      const putRes = await fetch(base + '/api/caddy/load', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(cfg)
-      });
-      let pt=''; let pd=null; try { pd = await putRes.json(); } catch { try { pt = await putRes.text(); } catch { pt=''; } }
-      if (!putRes.ok) throw new Error((pd && (pd.error || pd.body)) || pt || 'Save failed');
-      // Go to server route page
-      window.location.href = base + '/route/' + encodeURIComponent(server);
-    } catch (err) {
-      Swal.fire({ icon: 'error', title: 'Create route failed', text: (err && err.message ? err.message : String(err)) });
-    }
-  });
-})();
-</script>
-
-<!-- New Server Modal -->
-<div id="newServerModal" class="fixed inset-0 z-[1000] hidden" aria-hidden="true">
-  <div id="newServerBackdrop" class="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity"></div>
-  <div class="absolute inset-0 flex items-center justify-center p-4">
-    <div id="newServerPanel" class="w-full max-w-md bg-theme shadow-2xl rounded-2xl overflow-hidden transform transition-all duration-200 ease-out opacity-0 scale-95">
-      <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
-        <h3 class="text-lg font-semibold text-theme">Add Server</h3>
-        <button id="btnCloseNewServer" class="px-3 py-1.5 rounded text-theme hover:bg-slate-700/50">✕</button>
-      </div>
-      <form id="formNewServer" class="p-4 space-y-4">
-        <div>
-          <label for="ns_name" class="block text-sm mb-1 text-theme">Server Name</label>
-          <input id="ns_name" type="text" class="w-full input-theme rounded-[55px] text-center text-[16px] h-[50px]" placeholder="myserver" />
-        </div>
-        <div>
-          <label for="ns_listen" class="block text-sm mb-1 text-theme">Listen (comma or newline separated)</label>
-          <textarea id="ns_listen" class="w-full input-theme rounded-[14px] text-sm h-[90px]" rows="2" placeholder=":80, :443"></textarea>
-        </div>
-        <div class="pt-2 flex justify-end gap-2">
-          <button type="button" id="btnCloseNewServer2" class="px-5 py-2 rounded-[50px] text-white text-sm bg-slate-600 hover:bg-slate-500">ยกเลิก</button>
-          <button type="submit" class="px-5 py-2 rounded-[50px] bg-[#506BF4] text-white text-sm hover:opacity-90">บันทึก</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
-<script>
-(function(){
-  const base = '<?= defined('BASE_PATH') ? addslashes(BASE_PATH) : '' ?>';
-  const $modal = $('#newServerModal');
-  const $panel = $('#newServerPanel');
-  const $name = $('#ns_name');
-  const $listen = $('#ns_listen');
-
-  function openModal(){
-    $modal.removeClass('hidden');
-    requestAnimationFrame(() => { $panel.removeClass('opacity-0 scale-95').addClass('opacity-100 scale-100'); });
-    $('body').addClass('overflow-hidden');
-    setTimeout(() => { $name.trigger('focus'); }, 0);
-  }
-  function closeModal(){
-    $panel.addClass('opacity-0 scale-95').removeClass('opacity-100 scale-100');
-    setTimeout(() => { $modal.addClass('hidden'); $('body').removeClass('overflow-hidden'); }, 150);
-  }
-
-  $('#btnOpenNewServer').on('click', function(){ openModal(); });
-  $('#btnCloseNewServer, #btnCloseNewServer2, #newServerBackdrop').on('click', function(){ closeModal(); });
-  $(document).on('keydown', function(e){ if (e.key === 'Escape' && !$modal.hasClass('hidden')) closeModal(); });
-
-  $('#formNewServer').on('submit', async function(e){
-    e.preventDefault();
-    const name = String($name.val() || '').trim();
-    const listens = String($listen.val() || '').split(/[\,\n\s]+/).map(s => s.trim()).filter(Boolean);
-    if (!name) { await Swal.fire({ icon:'warning', title:'Missing name', text:'Please enter server name' }); return; }
-    if (!listens.length) { await Swal.fire({ icon:'warning', title:'Missing addresses', text:'Please enter listen addresses' }); return; }
-    try {
-      // get config
-      const getRes = await fetch(base + '/api/caddy/config/', { headers: { 'Accept': 'application/json' } });
-      let cfg = null; let t='';
-      try { cfg = await getRes.json(); } catch { try { t = await getRes.text(); } catch { t=''; } }
-      if (!getRes.ok || !cfg || typeof cfg !== 'object') throw new Error(t || 'Failed to load config');
-
-      // ensure structure
-      if (!cfg.apps) cfg.apps = {};
-      if (!cfg.apps.http) cfg.apps.http = {};
-      if (!cfg.apps.http.servers) cfg.apps.http.servers = {};
-      if (cfg.apps.http.servers[name]) { await Swal.fire({ icon:'error', title:'Duplicate', text:'Server already exists: ' + name }); return; }
-
-      cfg.apps.http.servers[name] = {
-        listen: listens,
-        routes: []
-      };
-
-      const putRes = await fetch(base + '/api/caddy/load', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(cfg)
-      });
-      let pt=''; let pd=null; try { pd = await putRes.json(); } catch { try { pt = await putRes.text(); } catch { pt=''; } }
-      if (!putRes.ok) throw new Error((pd && (pd.error || pd.body)) || pt || 'Save failed');
-      window.location.href = base + '/route/' + encodeURIComponent(name) + '?new=1';
-    } catch (err) {
-      Swal.fire({ icon:'error', title:'Create server failed', text:(err && err.message ? err.message : String(err)) });
-    }
-  });
-})();
-</script>
-
 <!-- Force-visible rule for opened dropdowns (bypass any global styles) -->
 <style>
+  /* Keep pills single-line to avoid height overflow */
+  .nav-pill { white-space: nowrap; }
   [data-menu][data-open="true"] { display: block !important; }
   /* When mobile menu is open, position the shared nav items as a full-width panel */
   #navItems[data-open="true"] {
