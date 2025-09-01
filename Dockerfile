@@ -7,7 +7,7 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 # Install dependencies and PHP extensions
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       libzip4 libzip-dev \
+       libzip-dev \
        libsqlite3-0 libsqlite3-dev \
        libfreetype6-dev libjpeg62-turbo-dev libpng-dev libwebp-dev \
        git unzip \
