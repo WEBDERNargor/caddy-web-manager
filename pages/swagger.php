@@ -12,12 +12,28 @@ HTML);
 <script src="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui-bundle.js"></script>
 <script>
   window.addEventListener('DOMContentLoaded', () => {
-    SwaggerUIBundle({
+    const params = new URLSearchParams(location.search);
+    const apiKey = params.get('api_key') || params.get('x_api_key');
+    const bearer = params.get('bearer');
+
+    const ui = SwaggerUIBundle({
       url: '/api/readfile/other.php?file=openapi.json',
       dom_id: '#swagger-ui',
       deepLinking: true,
       presets: [SwaggerUIBundle.presets.apis],
-      layout: 'BaseLayout'
+      layout: 'BaseLayout',
+      persistAuthorization: true,
+      onComplete: function() {
+        try {
+          if (apiKey) {
+            ui.preauthorizeApiKey('ApiKeyHeader', apiKey);
+            ui.preauthorizeApiKey('ApiKeyQuery', apiKey);
+          }
+          if (bearer) {
+            ui.preauthorizeApiKey('BearerAuth', bearer);
+          }
+        } catch (e) { /* ignore */ }
+      }
     });
   });
 </script>
