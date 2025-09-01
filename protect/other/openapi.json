@@ -1,0 +1,47 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Caddy Admin Proxy API",
+    "version": "1.0.0",
+    "description": "Proxy endpoints that forward to Caddy Admin API via /api/caddy.\n\nAuthentication for non-embedded requests: send API key using one of:\n- X-API-Key: <token> header\n- Authorization: Bearer <token> header\n- ?api_key=<token> query param"
+  },
+  "servers": [ { "url": "/" } ],
+  "components": {
+    "securitySchemes": {
+      "ApiKeyHeader": { "type": "apiKey", "in": "header", "name": "X-API-Key" },
+      "BearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" },
+      "ApiKeyQuery": { "type": "apiKey", "in": "query", "name": "api_key" }
+    }
+  },
+  "security": [ { "ApiKeyHeader": [] }, { "BearerAuth": [] }, { "ApiKeyQuery": [] } ],
+  "paths": {
+    "/api/caddy/config": {
+      "get": { "summary": "Get full Caddy config", "tags": ["Caddy"], "responses": { "200": { "description": "Current config JSON" } } },
+      "put": {
+        "summary": "Replace full Caddy config",
+        "tags": ["Caddy"],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/caddy/load": {
+      "post": {
+        "summary": "Load (apply) a new config",
+        "tags": ["Caddy"],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/caddy/config/apps/http/servers": {
+      "get": { "summary": "List HTTP servers", "tags": ["Caddy"], "responses": { "200": { "description": "Map of server objects" } } }
+    },
+    "/api/caddy/{path}": {
+      "parameters": [ { "name": "path", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Any subpath forwarded to Caddy Admin API (e.g., config/apps/http/servers/srv0)" } ],
+      "get": { "summary": "Generic GET passthrough", "tags": ["Passthrough"], "responses": { "200": { "description": "OK" } } },
+      "post": { "summary": "Generic POST passthrough", "tags": ["Passthrough"], "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } }, "responses": { "200": { "description": "OK" } } },
+      "put": { "summary": "Generic PUT passthrough", "tags": ["Passthrough"], "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } }, "responses": { "200": { "description": "OK" } } },
+      "patch": { "summary": "Generic PATCH passthrough", "tags": ["Passthrough"], "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } }, "responses": { "200": { "description": "OK" } } },
+      "delete": { "summary": "Generic DELETE passthrough", "tags": ["Passthrough"], "responses": { "200": { "description": "OK" } } }
+    }
+  }
+}
