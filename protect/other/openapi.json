@@ -20,7 +20,31 @@
       "put": {
         "summary": "Replace full Caddy config",
         "tags": ["Caddy"],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object" } } } },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object" },
+              "example": {
+                "apps": {
+                  "http": {
+                    "servers": {
+                      "srv0": {
+                        "listen": [":80"],
+                        "routes": [
+                          {
+                            "match": [ { "host": ["example.com"] } ],
+                            "handle": [ { "handler": "static_response", "body": "Hello from Caddy" } ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": { "200": { "description": "OK" } }
       }
     },
@@ -28,7 +52,31 @@
       "post": {
         "summary": "Load (apply) a new config",
         "tags": ["Caddy"],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object" } } } },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object" },
+              "example": {
+                "apps": {
+                  "http": {
+                    "servers": {
+                      "srv0": {
+                        "listen": [":80"],
+                        "routes": [
+                          {
+                            "match": [ { "host": ["example.com"] } ],
+                            "handle": [ { "handler": "static_response", "body": "Hello from Caddy" } ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": { "200": { "description": "OK" } }
       }
     },
@@ -38,9 +86,9 @@
     "/api/caddy/{path}": {
       "parameters": [ { "name": "path", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Any subpath forwarded to Caddy Admin API (e.g., config/apps/http/servers/srv0)" } ],
       "get": { "summary": "Generic GET passthrough", "tags": ["Passthrough"], "responses": { "200": { "description": "OK" } } },
-      "post": { "summary": "Generic POST passthrough", "tags": ["Passthrough"], "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } }, "responses": { "200": { "description": "OK" } } },
-      "put": { "summary": "Generic PUT passthrough", "tags": ["Passthrough"], "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } }, "responses": { "200": { "description": "OK" } } },
-      "patch": { "summary": "Generic PATCH passthrough", "tags": ["Passthrough"], "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } }, "responses": { "200": { "description": "OK" } } },
+      "post": { "summary": "Generic POST passthrough", "tags": ["Passthrough"], "requestBody": { "content": { "application/json": { "schema": { "type": "object" }, "example": { "hello": "world" } } } }, "responses": { "200": { "description": "OK" } } },
+      "put": { "summary": "Generic PUT passthrough", "tags": ["Passthrough"], "requestBody": { "content": { "application/json": { "schema": { "type": "object" }, "example": { "enabled": true } } } }, "responses": { "200": { "description": "OK" } } },
+      "patch": { "summary": "Generic PATCH passthrough", "tags": ["Passthrough"], "requestBody": { "content": { "application/json": { "schema": { "type": "object" }, "example": { "routes": [] } } } }, "responses": { "200": { "description": "OK" } } },
       "delete": { "summary": "Generic DELETE passthrough", "tags": ["Passthrough"], "responses": { "200": { "description": "OK" } } }
     }
   }
