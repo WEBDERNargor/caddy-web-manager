@@ -142,7 +142,9 @@ if (is_array($data)) {
 <div class="max-w-7xl mx-auto px-4 py-8">
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold">Servers</h1>
-        <div></div>
+        <div>
+            <button id="btnAddServer" class="px-4 py-2 rounded bg-green-600 text-white text-sm hover:bg-green-700">+ Add Server</button>
+        </div>
     </div>
     <div class="bg-theme shadow rounded-lg p-4 overflow-x-auto">
         <table id="serversTable" class="min-w-full display nowrap stripe hover bg-theme" style="width:100%">
@@ -269,6 +271,17 @@ if (is_array($data)) {
         }, 50);
 
         let editServerOriginal = null; 
+
+        // Open Add modal (create new)
+        $(document).on('click', '#btnAddServer', function(){
+            editServerOriginal = null;
+            $('#serverModalTitle').text('Add Server');
+            $('#serverName').val('');
+            $('#serverPort').val('');
+            $('#originalName').val(''); // empty = create new
+            $('#serverModal').removeClass('hidden');
+            setTimeout(() => { $('#serverName').trigger('focus'); }, 0);
+        });
 
         // SweetAlert2: show status alerts from query params
         (async function(){
