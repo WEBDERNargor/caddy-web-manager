@@ -77,6 +77,12 @@ docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
 docker compose exec app curl -s http://caddy:2019/config/ | head
 ```
 
+## เอกสารและลิงก์สำคัญ
+- __API Docs (Swagger)__: เปิดที่หน้าเว็บ `http://<SERVER-IP>:81/swagger`
+- __OpenAPI Spec (JSON)__: `http://<SERVER-IP>:81/api/readfile/other.php?file=openapi.json`
+- __Caddy Server Documentation__: https://caddyserver.com/docs/
+- __Caddy Admin API Reference__: https://caddyserver.com/docs/api
+
 ## Troubleshooting
 - เปิดหน้าแล้วไม่เจอปุ่ม "Add Server"
   - ตรวจว่าไฟล์ `pages/index.php` อัปเดตแล้ว (มีปุ่มในส่วนหัว) และรีเฟรชเคลียร์ cache
