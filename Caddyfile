@@ -1,4 +1,6 @@
-# Expose Caddy Admin API on 0.0.0.0:2019 for the app to manage config
-admin http://0.0.0.0:2019
+{
+ # Expose Caddy Admin API on 0.0.0.0:2019 for the app to manage config (HTTP)
+ admin 0.0.0.0:2019
+}
 
 # You can add sites here or let the app push config via the Admin API
