@@ -1,8 +1,28 @@
 
 :root{
+    --dark-body:#787878;
     --dark-bg:#262C35;
+    --dark-text:#ffffff;
+    --dark-input:#262C35;
+    --dark-input-border:#E5E5E5;
+    --dark-label-bg:#262C35;
+    --dark-navbar:#252C35;
+    --dark-border:#E5E5E5;
+
+    --light-body:#ffffff;
     --light-bg:#FFFFFF;
+    --light-text:#000000;
+    --light-input:#FFFFFF;
+    --light-input-border:#000000;
+    --light-label-bg:#FFFFFF;
+    --light-navbar:#D9D9D9;
+    --light-border:#D9D9D9;
 }
-html,body{
-    overflow : hidden;
+
+.input-theme{
+    outline:none;
+}
+
+.input-theme:focus{
+    outline:none;
 }

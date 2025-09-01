@@ -1,0 +1,8 @@
+RewriteEngine On
+
+# ถ้าไฟล์หรือโฟลเดอร์มีอยู่จริง ให้ใช้งานปกติ
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# ถ้าไม่มีไฟล์จริง ให้ redirect ไป index.php
+RewriteRule ^(.*)$ index.php/$1 [L,QSA]

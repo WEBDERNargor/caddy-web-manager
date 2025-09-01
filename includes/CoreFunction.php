@@ -65,3 +65,29 @@ function show_error_log($value)
         error_log($value);
     }
 }
+function set404()
+{
+    $layout = \App\includes\Layout::getInstance();
+
+    $setHead = function ($headContent) use ($layout) {
+        $layout->setHead($headContent);
+    };
+
+    http_response_code(404);
+
+
+    ob_start();
+
+
+    require __DIR__ . '/../pages/404.php';
+
+
+    $content = ob_get_clean();
+
+
+    $layout->setContent($content);
+
+    echo $layout->render();
+
+    exit();
+}

@@ -1,4 +1,12 @@
 RewriteEngine On
+
+# Friendly API endpoint that maps to the Caddy proxy config path
+# /api/config/ -> api/caddy/index.php with PATH_INFO=/config/
+RewriteRule ^api/config/?$ api/caddy/index.php/config/ [QSA,L]
+
+# Allow API proxy folder to handle its own routing (do not rewrite these here)
+RewriteRule ^api/caddy(?:/|$) - [L]
+
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(.*)$ index.php [QSA,L]
