@@ -16,6 +16,11 @@ if [ -f ".env" ]; then
   set +a
 fi
 
+# Fix PSR-4 case-sensitivity: map ./Controllers -> ./controllers if needed (Linux)
+if [ -d "controllers" ] && [ ! -e "Controllers" ]; then
+  ln -s controllers Controllers || true
+fi
+
 # Prepare SQLite path
 SQLITE_PATH_C="${SQLITE_PATH:-storage/database.sqlite}"
 SQLITE_DIR_C="$(dirname "$SQLITE_PATH_C")"
@@ -43,5 +48,8 @@ if [ ! -f "vendor/autoload.php" ]; then
 else
   echo "[entrypoint] Vendor already present, skipping composer install."
 fi
+
+# Ensure autoload is up-to-date (important after symlink)
+composer dump-autoload --optimize --no-interaction || true
 
 exec "$@"
