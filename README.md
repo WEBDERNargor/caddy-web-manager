@@ -102,5 +102,110 @@ docker compose exec app curl -s http://caddy:2019/config/ | head
   docker compose exec app composer dump-autoload -o
   ```
 
+---
+ 
+# Caddy Web Manager (PHP) — English
+ 
+Manage Caddy via the Admin API using PHP (Apache) + Docker Compose.
+ 
+Important files:
+- `docker-compose.yml` – defines `app` (web) and `caddy` services
+- `Caddyfile` – configures Caddy Admin API
+- `docker.env` – environment values for the web app (loaded as `.env` inside the container)
+- `pages/index.php` – Servers page (with "+ Add Server" button)
+ 
+## Features
+- View/Create/Update/Delete HTTP servers in Caddy (via Admin API `/load`, `/config`)
+- Simple UI using DataTables + SweetAlert2
+- Safe production mode: Admin API is only exposed inside the Docker network
+ 
+## Requirements
+- Docker and Docker Compose v2
+- External ports used: 80, 443, 81 (web app UI)
+ 
+## Quick Start
+1) Verify/update these values
+   - `Caddyfile`:
+     ```
+     {
+       admin 0.0.0.0:2019
+     }
+     ```
+   - `docker.env`:
+     ```env
+     WEB_MODE="production"
+     WEB_URL="/"
+     DB_DRIVER="sqlite"
+     SQLITE_PATH="storage/database.sqlite"
+     JWT_SECRET="change_me_in_production"
+     CADDY_URL="http://caddy:2019"   # used inside the Docker network
+     ```
+   - `docker-compose.yml`: do not publish `2019:2019`
+ 
+2) Start the stack
+   ```bash
+   docker compose up -d --build
+   ```
+ 
+3) Open the web UI
+   - URL: `http://<SERVER-IP>:81/`
+   - The "Servers" menu talks to the internal Caddy Admin API
+ 
+## Using the Servers page
+- The "+ Add Server" button opens a modal to create a server
+  - Fields
+    - Server Name: e.g. `srv0`
+    - Port: accepts `:80`, `:443`, `8080`, or `0.0.0.0:8080`
+  - Click "Save": it will POST `action=save_server` and call Caddy `/load`
+- "Edit" opens a modal to change name/port (rename supported)
+- "Delete" confirms via SweetAlert2 and writes back to Caddy
+ 
+Note: If `CADDY_URL` is wrong/unreachable, the page will show `?status=error`.
+ 
+## Port mapping
+- `app` (Apache): external `81 -> 8000`
+- `caddy`: external `80:80`, `443:443` (Admin API 2019 is internal only)
+ 
+## Common commands
+```bash
+# Container status
+docker compose ps
+ 
+# Logs
+docker compose logs -f app
+docker compose logs -f caddy
+ 
+# Reload Caddy after editing Caddyfile
+docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
+ 
+# Test Admin API from inside the app container
+docker compose exec app curl -s http://caddy:2019/config/ | head
+```
+ 
+## Docs & links
+- API Docs (Swagger): open at `http://<SERVER-IP>:81/swagger`
+- OpenAPI Spec (JSON): `http://<SERVER-IP>:81/api/readfile/other.php?file=openapi.json`
+- Caddy Server Documentation: https://caddyserver.com/docs/
+- Caddy Admin API Reference: https://caddyserver.com/docs/api
+ 
+## Troubleshooting
+- "Add Server" button missing
+  - Ensure `pages/index.php` is updated (contains the button) and hard refresh to clear cache
+- Errors when creating/editing a server
+  - Check `CADDY_URL` in `docker.env` is `http://caddy:2019`
+  - Run `docker compose exec app curl -v http://caddy:2019/config/ | head` and expect HTTP 200 + JSON
+- Cannot access `http://34.x.x.x:2019` externally
+  - This is intentional for security (do not publish 2019); access internally via `caddy:2019` only
+ 
+## For developers
+- Main PHP code:
+  - `pages/` – pages & UI
+  - `controllers/`, `includes/`, `composables/` – app structure
+- If you change dependencies, run inside the container (entrypoint handles autoload):
+  ```bash
+  docker compose exec app composer install
+  docker compose exec app composer dump-autoload -o
+  ```
+ 
 ## ผู้เขียน
 - [@WEBDERNargor](https://github.com/WEBDERNargor)
