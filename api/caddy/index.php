@@ -15,6 +15,13 @@ if (!$__EMBED) {
 // API Key verification (non-embedded requests only)
 // ===========================
 if (!$__EMBED) {
+    // Ensure database schema exists (creates SQLite file/tables if missing)
+    try {
+        $initializer = new \App\Controllers\InitController();
+        $initializer->InitDB();
+    } catch (\Throwable $e) {
+        // proceed; connection errors will be reported below
+    }
     // Lazy-load DB utilities
 
     

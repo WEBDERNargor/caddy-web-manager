@@ -22,6 +22,18 @@ class Database
 
             if ($driver === 'sqlite') {
                 $path = $this->config['db']['sqlite_path'] ?? (__DIR__ . '/../storage/database.sqlite');
+                // Normalize to absolute path if relative was provided in env (e.g. "storage/database.sqlite")
+                $isAbsolute = (
+                    // Windows drive letter path, e.g. C:\... or D:\...
+                    preg_match('/^[A-Za-z]:\\\\/', $path) === 1
+                    // or Unix-like absolute path
+                    || strpos($path, '/') === 0
+                );
+                if (!$isAbsolute) {
+                    $base = realpath(__DIR__ . '/..') ?: (__DIR__ . '/..');
+                    $path = rtrim($base, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . ltrim($path, "\\/");
+                }
+
                 $dir = dirname($path);
                 if (!is_dir($dir)) {
                     @mkdir($dir, 0777, true);
