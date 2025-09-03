@@ -7,6 +7,7 @@
 /protect/uploads/artworks/
 /protect/uploads/profiles/
 /ffmpeg/
+/storage/
 .env
 workerman.log
 composer.lock
