@@ -1,7 +1,12 @@
 RewriteEngine On
+
+# Route API proxy under public to its entry file
+RewriteRule ^api/caddy(.*)$ api/caddy/index.php$1 [QSA,L]
+
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^(.*)$ ../index.php [QSA,L]
+# Route everything else to public/index.php (front controller)
+RewriteRule ^(.*)$ index.php [QSA,L]
 
 # Allow access to js and uploads directories
 <IfModule mod_headers.c>
