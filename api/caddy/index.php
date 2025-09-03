@@ -81,6 +81,18 @@ if (!$__EMBED) {
 $target = $config['web']['caddy_url'] ?? 'http://127.0.0.1:2019';
 $target = rtrim($target, '/');
 
+// If configured host is not resolvable (e.g., 'caddy' outside Docker), fallback to localhost:2019
+try {
+    $p = @parse_url($target);
+    $host = is_array($p) ? ($p['host'] ?? '') : '';
+    if ($host && !filter_var($host, FILTER_VALIDATE_IP)) {
+        $resolved = @gethostbyname($host);
+        if (!$resolved || $resolved === $host) {
+            $target = 'http://127.0.0.1:2019';
+        }
+    }
+} catch (\Throwable $e) { /* ignore and keep current $target */ }
+
 // ===========================
 // Resolve path after this index.php (works with or without PATH_INFO)
 // ===========================
