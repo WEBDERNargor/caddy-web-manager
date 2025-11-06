@@ -31,32 +31,32 @@ if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] == 'POST') {
 ?>
 
 <form method="POST"
-    class="flex bg-theme absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[650px] h-[554px]  rounded-[20px] shadow-xl">
+    class="flex bg-theme absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[560px] rounded-[20px] shadow-xl">
     <input type="hidden" name="action" value="login">
     <button class="absolute right-[50px] top-[35px] text-[30px] btn-theme text-theme " type="button"><i
             class="fas fa-sun"></i></button>
-    <div class="px-20 py-20 w-full flex flex-col items-center">
+    <div class="px-14 py-12 w-full flex flex-col items-center">
         <div class="w-full flex justify-center">
             <i class="text-theme fas fa-user text-[35px] px-4"></i>
-            <h1 class="text-theme text-[30px]">Login</h1>
+            <h1 class="text-theme text-[26px]">Login</h1>
         </div>
 
-        <div class="w-full mt-10 relative">
+        <div class="w-full mt-8 relative">
             <label class="text-theme label-bg absolute top-[-13px] left-[40px] px-[4px]" id="username-label"
                 for="username">Username</label>
-            <input class="w-full input-theme h-[60px] rounded-[55px] text-center text-[20px] outline-none shadow-sm"
+            <input class="w-full input-theme h-[56px] rounded-[55px] text-center text-[18px] outline-none shadow-sm"
                 placeholder="Username" name="username" id="username" type="text">
         </div>
 
-        <div class="w-full mt-5 relative">
+        <div class="w-full mt-4 relative">
             <label class="text-theme label-bg absolute top-[-13px] left-[40px] px-[4px]" id="password-label"
                 for="username">Password</label>
-            <input class="w-full input-theme h-[60px] rounded-[55px] text-center text-[20px] outline-none shadow-sm"
+            <input class="w-full input-theme h-[56px] rounded-[55px] text-center text-[18px] outline-none shadow-sm"
                 placeholder="Password" name="password" id="password" type="password">
         </div>
 
 
-        <button class="w-[60%] py-4 bg-[#506BF4] rounded-[50px] mt-10 text-white text-[20px] "
+        <button class="w-[60%] py-3 bg-[#506BF4] rounded-[50px] mt-8 text-white text-[18px] "
             type="submit">Submit</button>
 
     </div>
