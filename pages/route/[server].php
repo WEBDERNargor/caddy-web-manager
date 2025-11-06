@@ -422,7 +422,7 @@ $(function(){
                 </div>
                 <div>
                     <label for="dial" class="block text-sm mb-1 text-theme">Dial (ip[:port])</label>
-                    <input id="dial" name="dial" type="text" class="w-full input-theme rounded-[55px] text-center text-[16px] h-[50px]" placeholder="52.63.187.129:3001" />
+                    <input id="dial" name="dial" type="text" class="w-full input-theme rounded-[55px] text-left text-[16px] h-[50px]" placeholder="52.63.187.129:3001" />
                 </div>
                 <div class="flex items-center gap-2">
                     <input id="insecure" name="insecure" value="1" type="checkbox" class="h-4 w-4" />
